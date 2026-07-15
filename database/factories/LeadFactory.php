@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Modules\Leads\Enums\LeadCaptureStep;
 use App\Modules\Leads\Enums\LeadStatus;
 use App\Modules\Leads\Models\Lead;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -28,6 +29,7 @@ class LeadFactory extends Factory
             'company' => fake()->company(),
             'source' => 'telegram',
             'status' => LeadStatus::New,
+            'capture_step' => LeadCaptureStep::Completed,
             'meta' => [],
         ];
     }

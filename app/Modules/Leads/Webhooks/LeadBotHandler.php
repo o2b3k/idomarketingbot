@@ -25,6 +25,7 @@ final class LeadBotHandler extends WebhookHandler
     {
         $this->forgetState();
         $this->putState(['step' => 'name']);
+        $this->leadService->startFromBot($this->telegramIdentity());
 
         Log::info('Telegram lead dialog started', ['tg_user_id' => $this->telegramUserId()]);
         $this->reply('Здравствуйте! Как вас зовут?');
@@ -33,6 +34,7 @@ final class LeadBotHandler extends WebhookHandler
     public function cancel(): void
     {
         $this->forgetState();
+        $this->leadService->markCancelled($this->telegramUserId());
 
         Log::info('Telegram lead dialog cancelled', ['tg_user_id' => $this->telegramUserId()]);
         $this->chat->message('Диалог отменён. Отправьте /start, чтобы начать заново.')
@@ -92,6 +94,7 @@ final class LeadBotHandler extends WebhookHandler
         $state['name'] = $name;
         $state['step'] = 'phone';
         $this->putState($state);
+        $this->leadService->recordName($this->telegramUserId(), $name);
 
         $keyboard = ReplyKeyboard::make()
             ->row([ReplyButton::make('Поделиться номером')->requestContact()])
@@ -126,6 +129,7 @@ final class LeadBotHandler extends WebhookHandler
         $state['phone_raw'] = $phoneRaw;
         $state['step'] = 'company';
         $this->putState($state);
+        $this->leadService->recordPhone($telegramUserId, $phoneRaw);
 
         $this->chat->message('Как называется ваша компания?')
             ->removeReplyKeyboard()
@@ -192,6 +196,21 @@ final class LeadBotHandler extends WebhookHandler
     private function telegramUserId(): int
     {
         return $this->message?->from()?->id() ?? 0;
+    }
+
+    /**
+     * @return array{tg_user_id: int, tg_chat_id: int, tg_username: string|null, meta: array<string, string|null>}
+     */
+    private function telegramIdentity(): array
+    {
+        $from = $this->message?->from();
+
+        return [
+            'tg_user_id' => $this->telegramUserId(),
+            'tg_chat_id' => (int) $this->chat->chat_id,
+            'tg_username' => $from?->username() ?: null,
+            'meta' => ['language_code' => $from?->languageCode() ?: null],
+        ];
     }
 
     private function cache(): Repository

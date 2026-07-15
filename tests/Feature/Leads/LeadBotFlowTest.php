@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Leads\Enums\LeadCaptureStep;
 use App\Modules\Leads\Models\Lead;
 use App\Modules\Leads\Services\LeadService;
 use DefStudio\Telegraph\Facades\Telegraph;
@@ -77,6 +78,12 @@ test('LeadBotFlow captures a full conversation with a manually entered phone', f
     sendLeadBotUpdate(1, 101, '/start')->assertNoContent();
     Telegraph::assertSent('Здравствуйте! Как вас зовут?');
 
+    $startedLead = Lead::query()->sole();
+    expect($startedLead->capture_step)->toBe(LeadCaptureStep::Started)
+        ->and($startedLead->name)->toBeNull()
+        ->and($startedLead->phone)->toBeNull()
+        ->and($startedLead->company)->toBeNull();
+
     sendLeadBotUpdate(2, 101, 'Алия')->assertNoContent();
     Telegraph::assertSentData('sendMessage', [
         'chat_id' => '101',
@@ -88,7 +95,15 @@ test('LeadBotFlow captures a full conversation with a manually entered phone', f
         ],
     ]);
 
+    expect($startedLead->refresh()->capture_step)->toBe(LeadCaptureStep::Name)
+        ->and($startedLead->name)->toBe('Алия')
+        ->and($startedLead->phone)->toBeNull();
+
     sendLeadBotUpdate(3, 101, '0555 123 456')->assertNoContent();
+    expect($startedLead->refresh()->capture_step)->toBe(LeadCaptureStep::Phone)
+        ->and($startedLead->phone)->toBe('+996555123456')
+        ->and($startedLead->company)->toBeNull();
+
     sendLeadBotUpdate(4, 101, 'Acme')->assertNoContent();
 
     $lead = Lead::query()->sole();
@@ -96,7 +111,8 @@ test('LeadBotFlow captures a full conversation with a manually entered phone', f
     expect($lead->tg_user_id)->toBe(101)
         ->and($lead->name)->toBe('Алия')
         ->and($lead->phone)->toBe('+996555123456')
-        ->and($lead->company)->toBe('Acme');
+        ->and($lead->company)->toBe('Acme')
+        ->and($lead->capture_step)->toBe(LeadCaptureStep::Completed);
 });
 
 test('LeadBotFlow accepts a shared contact belonging to the sender', function () {
@@ -128,7 +144,11 @@ test('LeadBotFlow rejects invalid and foreign contact input without advancing', 
     ])->assertNoContent();
     Telegraph::assertSent('Пожалуйста, отправьте именно свой контакт.');
 
-    expect(Lead::query()->count())->toBe(0);
+    $lead = Lead::query()->sole();
+
+    expect($lead->capture_step)->toBe(LeadCaptureStep::Name)
+        ->and($lead->name)->toBe('Азиз')
+        ->and($lead->phone)->toBeNull();
 });
 
 test('LeadBotFlow cancel resets the dialog', function () {
@@ -138,7 +158,7 @@ test('LeadBotFlow cancel resets the dialog', function () {
     sendLeadBotUpdate(33, 404, '+996555123456')->assertNoContent();
 
     Telegraph::assertSent('Отправьте /start, чтобы оставить заявку.');
-    expect(Lead::query()->count())->toBe(0);
+    expect(Lead::query()->sole()->capture_step)->toBe(LeadCaptureStep::Cancelled);
 });
 
 test('LeadBotFlow deduplicates repeated submissions by Telegram user id', function () {

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Leads\Tables;
 
+use App\Modules\Leads\Enums\LeadCaptureStep;
 use App\Modules\Leads\Enums\LeadStatus;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -20,14 +21,17 @@ class LeadsTable
                     ->sortable(),
                 TextColumn::make('name')
                     ->label('Имя')
+                    ->placeholder('Не указано')
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('phone')
                     ->label('Телефон')
+                    ->placeholder('Не указан')
                     ->searchable()
                     ->copyable(),
                 TextColumn::make('company')
                     ->label('Компания')
+                    ->placeholder('Не указана')
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('status')
@@ -35,6 +39,12 @@ class LeadsTable
                     ->badge()
                     ->formatStateUsing(fn (LeadStatus $state): string => $state->label())
                     ->color(fn (LeadStatus $state): string => $state->color())
+                    ->sortable(),
+                TextColumn::make('capture_step')
+                    ->label('Этап')
+                    ->badge()
+                    ->formatStateUsing(fn (LeadCaptureStep $state): string => $state->label())
+                    ->color(fn (LeadCaptureStep $state): string => $state->color())
                     ->sortable(),
                 TextColumn::make('tg_username')
                     ->label('Telegram')
@@ -55,6 +65,11 @@ class LeadsTable
                     ->label('Статус')
                     ->options(collect(LeadStatus::cases())->mapWithKeys(
                         fn (LeadStatus $status): array => [$status->value => $status->label()],
+                    )->all()),
+                SelectFilter::make('capture_step')
+                    ->label('Этап заполнения')
+                    ->options(collect(LeadCaptureStep::cases())->mapWithKeys(
+                        fn (LeadCaptureStep $step): array => [$step->value => $step->label()],
                     )->all()),
                 SelectFilter::make('source')
                     ->label('Источник')

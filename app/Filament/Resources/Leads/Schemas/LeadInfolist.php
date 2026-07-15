@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Leads\Schemas;
 
+use App\Modules\Leads\Enums\LeadCaptureStep;
 use App\Modules\Leads\Enums\LeadStatus;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
@@ -15,14 +16,19 @@ class LeadInfolist
             ->components([
                 Section::make('Контактные данные')
                     ->schema([
-                        TextEntry::make('name')->label('Имя'),
-                        TextEntry::make('phone')->label('Телефон')->copyable(),
-                        TextEntry::make('company')->label('Компания'),
+                        TextEntry::make('name')->label('Имя')->placeholder('Не указано'),
+                        TextEntry::make('phone')->label('Телефон')->placeholder('Не указан')->copyable(),
+                        TextEntry::make('company')->label('Компания')->placeholder('Не указана'),
                         TextEntry::make('status')
                             ->label('Статус')
                             ->badge()
                             ->formatStateUsing(fn (LeadStatus $state): string => $state->label())
                             ->color(fn (LeadStatus $state): string => $state->color()),
+                        TextEntry::make('capture_step')
+                            ->label('Этап заполнения')
+                            ->badge()
+                            ->formatStateUsing(fn (LeadCaptureStep $state): string => $state->label())
+                            ->color(fn (LeadCaptureStep $state): string => $state->color()),
                     ])
                     ->columns(2),
                 Section::make('Telegram')

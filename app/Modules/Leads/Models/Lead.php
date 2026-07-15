@@ -2,6 +2,7 @@
 
 namespace App\Modules\Leads\Models;
 
+use App\Modules\Leads\Enums\LeadCaptureStep;
 use App\Modules\Leads\Enums\LeadStatus;
 use Database\Factories\LeadFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -14,17 +15,18 @@ use Illuminate\Support\Carbon;
  * @property int $tg_user_id
  * @property int $tg_chat_id
  * @property string|null $tg_username
- * @property string $name
- * @property string $phone
- * @property string $phone_raw
- * @property string $company
+ * @property string|null $name
+ * @property string|null $phone
+ * @property string|null $phone_raw
+ * @property string|null $company
  * @property string $source
  * @property LeadStatus $status
+ * @property LeadCaptureStep $capture_step
  * @property array<string, mixed>|null $meta
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['tg_user_id', 'tg_chat_id', 'tg_username', 'name', 'phone', 'phone_raw', 'company', 'source', 'status', 'meta'])]
+#[Fillable(['tg_user_id', 'tg_chat_id', 'tg_username', 'name', 'phone', 'phone_raw', 'company', 'source', 'status', 'capture_step', 'meta'])]
 class Lead extends Model
 {
     /** @use HasFactory<LeadFactory> */
@@ -44,6 +46,7 @@ class Lead extends Model
             'tg_user_id' => 'integer',
             'tg_chat_id' => 'integer',
             'status' => LeadStatus::class,
+            'capture_step' => LeadCaptureStep::class,
             'meta' => 'array',
         ];
     }

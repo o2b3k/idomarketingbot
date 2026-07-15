@@ -4,6 +4,7 @@ use App\Filament\Resources\Leads\LeadResource;
 use App\Filament\Resources\Leads\Pages\EditLead;
 use App\Filament\Resources\Leads\Pages\ListLeads;
 use App\Models\User;
+use App\Modules\Leads\Enums\LeadCaptureStep;
 use App\Modules\Leads\Enums\LeadStatus;
 use App\Modules\Leads\Models\Lead;
 use Filament\Facades\Filament;
@@ -45,6 +46,25 @@ test('lead table can search and filter records', function () {
         ->filterTable('status', LeadStatus::Qualified->value)
         ->assertCanSeeTableRecords([$qualifiedLead])
         ->assertCanNotSeeTableRecords([$newLead]);
+});
+
+test('lead table displays and filters incomplete capture stages', function () {
+    $startedLead = Lead::factory()->create([
+        'name' => null,
+        'phone' => null,
+        'phone_raw' => null,
+        'company' => null,
+        'capture_step' => LeadCaptureStep::Started,
+    ]);
+    $completedLead = Lead::factory()->create([
+        'capture_step' => LeadCaptureStep::Completed,
+    ]);
+
+    Livewire::test(ListLeads::class)
+        ->assertCanSeeTableRecords([$startedLead, $completedLead])
+        ->filterTable('capture_step', LeadCaptureStep::Started->value)
+        ->assertCanSeeTableRecords([$startedLead])
+        ->assertCanNotSeeTableRecords([$completedLead]);
 });
 
 test('manager can update lead status and contact details', function () {

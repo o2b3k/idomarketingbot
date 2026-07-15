@@ -18,16 +18,13 @@ class LeadForm
                     ->schema([
                         TextInput::make('name')
                             ->label('Имя')
-                            ->required()
                             ->maxLength(100),
                         TextInput::make('phone')
                             ->label('Телефон')
-                            ->required()
                             ->tel()
                             ->maxLength(20),
                         TextInput::make('company')
                             ->label('Компания')
-                            ->required()
                             ->maxLength(150),
                         Select::make('status')
                             ->label('Статус')
