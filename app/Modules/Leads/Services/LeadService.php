@@ -23,16 +23,15 @@ final class LeadService
 
         try {
             $number = phone($phone, 'KG');
+            $normalizedPhone = $number->formatE164();
 
-            if ($number->isOfCountry('KG')) {
-                return $number->formatE164();
+            if ($number->isOfCountry('KG') && preg_match('/^\+996\d{9}$/', $normalizedPhone) === 1) {
+                return $normalizedPhone;
             }
         } catch (Throwable) {
         }
 
-        Log::debug('Lead phone normalization failed', [
-            'digits' => preg_replace('/\D+/', '', $phone),
-        ]);
+        Log::debug('Lead phone normalization failed', ['country' => 'KG']);
 
         return null;
     }

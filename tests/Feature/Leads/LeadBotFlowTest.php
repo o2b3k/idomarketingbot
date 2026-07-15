@@ -69,6 +69,10 @@ test('LeadBotFlow normalizes only Kyrgyz phone numbers', function () {
 
     expect($service->normalizePhone('0555 123 456'))->toBe('+996555123456')
         ->and($service->normalizePhone('+996 555 123 456'))->toBe('+996555123456')
+        ->and($service->normalizePhone('0778440455'))->toBe('+996778440455')
+        ->and($service->normalizePhone('+996778440455'))->toBe('+996778440455')
+        ->and($service->normalizePhone('+99677844045'))->toBeNull()
+        ->and($service->normalizePhone('077844045'))->toBeNull()
         ->and($service->normalizePhone('+1 202 555 0123'))->toBeNull()
         ->and($service->normalizePhone('not-a-phone'))->toBeNull()
         ->and($factoryLead->exists)->toBeTrue();
