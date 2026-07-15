@@ -18,6 +18,10 @@ final class LeadBotHandler extends WebhookHandler
 {
     private const STATE_TTL_SECONDS = 1800;
 
+    private const RESTART_YES = 'Да, заполнить заново';
+
+    private const RESTART_NO = 'Нет';
+
     public function __construct(
         private readonly LeadService $leadService,
         private readonly LeadManagerNotifier $leadManagerNotifier,
@@ -31,12 +35,26 @@ final class LeadBotHandler extends WebhookHandler
             return;
         }
 
-        $this->forgetState();
-        $this->putState(['step' => 'name']);
-        $this->leadService->startFromBot($this->telegramIdentity());
+        if ($this->leadService->hasCompletedLead($this->telegramUserId())) {
+            $this->forgetState();
+            $this->putState(['step' => 'confirm_restart']);
 
-        Log::info('Telegram lead dialog started', ['tg_user_id' => $this->telegramUserId()]);
-        $this->reply('Здравствуйте! Как к вам обращаться? Напишите имя');
+            $keyboard = ReplyKeyboard::make()
+                ->row([
+                    ReplyButton::make(self::RESTART_YES),
+                    ReplyButton::make(self::RESTART_NO),
+                ])
+                ->resize()
+                ->oneTime();
+
+            $this->chat->message('Вы уже оставляли заявку. Хотите заполнить её заново?')
+                ->replyKeyboard($keyboard)
+                ->send();
+
+            return;
+        }
+
+        $this->beginConversation();
     }
 
     public function cancel(): void
@@ -77,6 +95,7 @@ final class LeadBotHandler extends WebhookHandler
             'name' => $this->acceptName((string) $text, $state),
             'phone' => $this->acceptPhone((string) $text, $state),
             'company' => $this->acceptCompany((string) $text, $state),
+            'confirm_restart' => $this->acceptRestartConfirmation((string) $text),
             default => $this->start(),
         };
     }
@@ -94,6 +113,45 @@ final class LeadBotHandler extends WebhookHandler
         rescue(fn () => $this->chat->message('Произошла ошибка. Отправьте /start и попробуйте снова.')
             ->removeReplyKeyboard()
             ->send(), report: false);
+    }
+
+    private function acceptRestartConfirmation(string $answer): void
+    {
+        $answer = trim($answer);
+
+        if ($answer === self::RESTART_YES) {
+            $this->beginConversation(removeKeyboard: true);
+
+            return;
+        }
+
+        if ($answer === self::RESTART_NO) {
+            $this->forgetState();
+            $this->chat->message('Хорошо, текущая заявка сохранена.')
+                ->removeReplyKeyboard()
+                ->send();
+
+            return;
+        }
+
+        $this->reply('Пожалуйста, выберите «Да, заполнить заново» или «Нет».');
+    }
+
+    private function beginConversation(bool $removeKeyboard = false): void
+    {
+        $this->forgetState();
+        $this->putState(['step' => 'name']);
+        $this->leadService->startFromBot($this->telegramIdentity());
+
+        Log::info('Telegram lead dialog started', ['tg_user_id' => $this->telegramUserId()]);
+
+        $message = $this->chat->message('Здравствуйте! Как к вам обращаться? Напишите имя');
+
+        if ($removeKeyboard) {
+            $message->removeReplyKeyboard();
+        }
+
+        $message->send();
     }
 
     /** @param array<string, mixed> $state */

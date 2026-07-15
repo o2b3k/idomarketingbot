@@ -89,6 +89,7 @@ test('LeadBotFlow normalizes only Kyrgyz phone numbers', function () {
         ->and($service->normalizePhone('077844045'))->toBeNull()
         ->and($service->normalizePhone('+1 202 555 0123'))->toBeNull()
         ->and($service->normalizePhone('not-a-phone'))->toBeNull()
+        ->and($service->hasCompletedLead($factoryLead->tg_user_id))->toBeTrue()
         ->and($factoryLead->exists)->toBeTrue();
 });
 
@@ -207,16 +208,53 @@ test('LeadBotFlow cancel resets the dialog', function () {
 
 test('LeadBotFlow deduplicates repeated submissions by Telegram user id', function () {
     foreach ([['First', 'Alpha'], ['Second', 'Beta']] as $iteration => [$name, $company]) {
-        $messageId = 40 + ($iteration * 4);
+        $messageId = 40 + ($iteration * 5);
         sendLeadBotUpdate($messageId, 505, '/start')->assertNoContent();
-        sendLeadBotUpdate($messageId + 1, 505, $name)->assertNoContent();
-        sendLeadBotUpdate($messageId + 2, 505, '+996555123456')->assertNoContent();
-        sendLeadBotUpdate($messageId + 3, 505, $company)->assertNoContent();
+
+        if ($iteration > 0) {
+            Telegraph::assertSent('Вы уже оставляли заявку. Хотите заполнить её заново?');
+            sendLeadBotUpdate($messageId + 1, 505, 'Да, заполнить заново')->assertNoContent();
+        }
+
+        sendLeadBotUpdate($messageId + 2, 505, $name)->assertNoContent();
+        sendLeadBotUpdate($messageId + 3, 505, '+996555123456')->assertNoContent();
+        sendLeadBotUpdate($messageId + 4, 505, $company)->assertNoContent();
     }
 
     expect(Lead::query()->count())->toBe(1)
         ->and(Lead::query()->sole()->name)->toBe('Second')
         ->and(Lead::query()->sole()->company)->toBe('Beta');
+});
+
+test('LeadBotFlow preserves a completed lead when restart is declined', function () {
+    sendLeadBotUpdate(80, 808, '/start')->assertNoContent();
+    sendLeadBotUpdate(81, 808, 'Айбек')->assertNoContent();
+    sendLeadBotUpdate(82, 808, '0555 123 456')->assertNoContent();
+    sendLeadBotUpdate(83, 808, 'Nomad')->assertNoContent();
+
+    sendLeadBotUpdate(84, 808, '/start')->assertNoContent();
+    Telegraph::assertSentData('sendMessage', [
+        'chat_id' => '808',
+        'text' => 'Вы уже оставляли заявку. Хотите заполнить её заново?',
+        'reply_markup' => [
+            'keyboard' => [[
+                ['text' => 'Да, заполнить заново'],
+                ['text' => 'Нет'],
+            ]],
+            'resize_keyboard' => true,
+            'one_time_keyboard' => true,
+        ],
+    ]);
+
+    sendLeadBotUpdate(85, 808, 'Нет')->assertNoContent();
+    Telegraph::assertSent('Хорошо, текущая заявка сохранена.');
+
+    $lead = Lead::query()->sole();
+
+    expect($lead->name)->toBe('Айбек')
+        ->and($lead->phone)->toBe('+996555123456')
+        ->and($lead->company)->toBe('Nomad')
+        ->and($lead->capture_step)->toBe(LeadCaptureStep::Completed);
 });
 
 test('LeadBotFlow rejects a webhook without its secret token', function () {

@@ -68,6 +68,14 @@ final class LeadService
         return $this->updateCapture($telegramUserId, LeadCaptureStep::Name, ['name' => $name]);
     }
 
+    public function hasCompletedLead(int $telegramUserId): bool
+    {
+        return Lead::query()
+            ->where('tg_user_id', $telegramUserId)
+            ->where('capture_step', LeadCaptureStep::Completed)
+            ->exists();
+    }
+
     public function recordPhone(int $telegramUserId, string $phoneRaw): Lead
     {
         $normalizedPhone = $this->normalizePhone($phoneRaw);
