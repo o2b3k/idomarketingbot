@@ -2,6 +2,7 @@
 
 namespace App\Modules\Leads\Webhooks;
 
+use App\Modules\Leads\Services\LeadManagerNotifier;
 use App\Modules\Leads\Services\LeadService;
 use DefStudio\Telegraph\Handlers\WebhookHandler;
 use DefStudio\Telegraph\Keyboard\ReplyButton;
@@ -16,8 +17,10 @@ final class LeadBotHandler extends WebhookHandler
 {
     private const STATE_TTL_SECONDS = 1800;
 
-    public function __construct(private readonly LeadService $leadService)
-    {
+    public function __construct(
+        private readonly LeadService $leadService,
+        private readonly LeadManagerNotifier $leadManagerNotifier,
+    ) {
         parent::__construct();
     }
 
@@ -149,7 +152,7 @@ final class LeadBotHandler extends WebhookHandler
 
         $from = $this->message?->from();
 
-        $this->leadService->createFromBot([
+        $lead = $this->leadService->createFromBot([
             'tg_user_id' => $this->telegramUserId(),
             'tg_chat_id' => (int) $this->chat->chat_id,
             'tg_username' => $from?->username() ?: null,
@@ -158,6 +161,8 @@ final class LeadBotHandler extends WebhookHandler
             'company' => $company,
             'meta' => ['language_code' => $from?->languageCode() ?: null],
         ]);
+
+        $this->leadManagerNotifier->notify($this->bot, $lead);
 
         $this->forgetState();
 

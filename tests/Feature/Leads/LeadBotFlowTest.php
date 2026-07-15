@@ -2,6 +2,7 @@
 
 use App\Modules\Leads\Enums\LeadCaptureStep;
 use App\Modules\Leads\Models\Lead;
+use App\Modules\Leads\Services\LeadManagerNotifier;
 use App\Modules\Leads\Services\LeadService;
 use DefStudio\Telegraph\Facades\Telegraph;
 use DefStudio\Telegraph\Models\TelegraphBot;
@@ -12,6 +13,7 @@ beforeEach(function () {
     config()->set('telegraph.webhook.secret_token', 'test-webhook-secret');
     config()->set('telegraph.webhook.throttle.max_attempts', 30);
     config()->set('telegraph.webhook.throttle.decay_seconds', 60);
+    config()->set('services.telegram.manager_chat_id');
 
     Telegraph::fake();
 
@@ -79,6 +81,8 @@ test('LeadBotFlow normalizes only Kyrgyz phone numbers', function () {
 });
 
 test('LeadBotFlow captures a full conversation with a manually entered phone', function () {
+    config()->set('services.telegram.manager_chat_id', '987654321');
+
     sendLeadBotUpdate(1, 101, '/start')->assertNoContent();
     Telegraph::assertSent('Здравствуйте! Как к вам обращаться? Напишите имя');
 
@@ -112,6 +116,10 @@ test('LeadBotFlow captures a full conversation with a manually entered phone', f
 
     sendLeadBotUpdate(4, 101, 'Acme')->assertNoContent();
     Telegraph::assertSent('Готово! Мы записали заявку и скоро свяжемся. 🙌');
+    Telegraph::assertSentData('sendMessage', [
+        'chat_id' => '987654321',
+        'text' => "🆕 Новая заявка\n\nИмя: Алия\nТелефон: +996555123456\nКомпания: Acme",
+    ]);
 
     $lead = Lead::query()->sole();
 
@@ -120,6 +128,23 @@ test('LeadBotFlow captures a full conversation with a manually entered phone', f
         ->and($lead->phone)->toBe('+996555123456')
         ->and($lead->company)->toBe('Acme')
         ->and($lead->capture_step)->toBe(LeadCaptureStep::Completed);
+});
+
+test('LeadManagerNotifier sends escaped lead details to the configured manager', function () {
+    config()->set('services.telegram.manager_chat_id', '-1001234567890');
+
+    $lead = Lead::factory()->create([
+        'name' => '<Алия>',
+        'phone' => '+996555123456',
+        'company' => 'A & B',
+    ]);
+
+    app(LeadManagerNotifier::class)->notify(TelegraphBot::query()->sole(), $lead);
+
+    Telegraph::assertSentData('sendMessage', [
+        'chat_id' => '-1001234567890',
+        'text' => "🆕 Новая заявка\n\nИмя: &lt;Алия&gt;\nТелефон: +996555123456\nКомпания: A &amp; B",
+    ]);
 });
 
 test('LeadBotFlow accepts a shared contact belonging to the sender', function () {
