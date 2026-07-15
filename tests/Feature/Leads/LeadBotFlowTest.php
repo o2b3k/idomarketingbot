@@ -29,6 +29,8 @@ function sendLeadBotUpdate(
     ?string $text = null,
     ?array $contact = null,
     bool $withSecret = true,
+    string $chatType = 'private',
+    ?int $chatId = null,
 ): TestResponse {
     $message = [
         'message_id' => $updateId,
@@ -41,8 +43,8 @@ function sendLeadBotUpdate(
             'language_code' => 'ru',
         ],
         'chat' => [
-            'id' => $telegramUserId,
-            'type' => 'private',
+            'id' => $chatId ?? $telegramUserId,
+            'type' => $chatType,
             'first_name' => 'Test',
         ],
     ];
@@ -64,6 +66,16 @@ function sendLeadBotUpdate(
         'message' => $message,
     ], $headers);
 }
+
+test('LeadBotFlow ignores regular messages and commands in groups', function () {
+    sendLeadBotUpdate(1, 101, 'круто', chatType: 'supergroup', chatId: -1001234567890)
+        ->assertNoContent();
+    sendLeadBotUpdate(2, 101, '/start', chatType: 'supergroup', chatId: -1001234567890)
+        ->assertNoContent();
+
+    Telegraph::assertNothingSent();
+    expect(Lead::query()->count())->toBe(0);
+});
 
 test('LeadBotFlow normalizes only Kyrgyz phone numbers', function () {
     $service = app(LeadService::class);

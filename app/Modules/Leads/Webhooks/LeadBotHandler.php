@@ -4,6 +4,7 @@ namespace App\Modules\Leads\Webhooks;
 
 use App\Modules\Leads\Services\LeadManagerNotifier;
 use App\Modules\Leads\Services\LeadService;
+use DefStudio\Telegraph\DTO\Chat;
 use DefStudio\Telegraph\Handlers\WebhookHandler;
 use DefStudio\Telegraph\Keyboard\ReplyButton;
 use DefStudio\Telegraph\Keyboard\ReplyKeyboard;
@@ -26,6 +27,10 @@ final class LeadBotHandler extends WebhookHandler
 
     public function start(): void
     {
+        if (! $this->isPrivateChat()) {
+            return;
+        }
+
         $this->forgetState();
         $this->putState(['step' => 'name']);
         $this->leadService->startFromBot($this->telegramIdentity());
@@ -36,6 +41,10 @@ final class LeadBotHandler extends WebhookHandler
 
     public function cancel(): void
     {
+        if (! $this->isPrivateChat()) {
+            return;
+        }
+
         $this->forgetState();
         $this->leadService->markCancelled($this->telegramUserId());
 
@@ -47,6 +56,10 @@ final class LeadBotHandler extends WebhookHandler
 
     protected function handleChatMessage(Stringable $text): void
     {
+        if (! $this->isPrivateChat()) {
+            return;
+        }
+
         $state = $this->state();
 
         if ($state === []) {
@@ -201,6 +214,11 @@ final class LeadBotHandler extends WebhookHandler
     private function telegramUserId(): int
     {
         return $this->message?->from()?->id() ?? 0;
+    }
+
+    private function isPrivateChat(): bool
+    {
+        return $this->message?->chat()?->type() === Chat::TYPE_PRIVATE;
     }
 
     /**
