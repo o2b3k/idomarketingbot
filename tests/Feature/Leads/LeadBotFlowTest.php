@@ -62,12 +62,13 @@ function sendLeadBotUpdate(
     ], $headers);
 }
 
-test('LeadBotFlow normalizes Uzbek and Kyrgyz phone numbers', function () {
+test('LeadBotFlow normalizes only Kyrgyz phone numbers', function () {
     $service = app(LeadService::class);
     $factoryLead = Lead::factory()->create();
 
-    expect($service->normalizePhone('90 123 45 67'))->toBe('+998901234567')
+    expect($service->normalizePhone('0555 123 456'))->toBe('+996555123456')
         ->and($service->normalizePhone('+996 555 123 456'))->toBe('+996555123456')
+        ->and($service->normalizePhone('+1 202 555 0123'))->toBeNull()
         ->and($service->normalizePhone('not-a-phone'))->toBeNull()
         ->and($factoryLead->exists)->toBeTrue();
 });
@@ -87,14 +88,14 @@ test('LeadBotFlow captures a full conversation with a manually entered phone', f
         ],
     ]);
 
-    sendLeadBotUpdate(3, 101, '90 123 45 67')->assertNoContent();
+    sendLeadBotUpdate(3, 101, '0555 123 456')->assertNoContent();
     sendLeadBotUpdate(4, 101, 'Acme')->assertNoContent();
 
     $lead = Lead::query()->sole();
 
     expect($lead->tg_user_id)->toBe(101)
         ->and($lead->name)->toBe('Алия')
-        ->and($lead->phone)->toBe('+998901234567')
+        ->and($lead->phone)->toBe('+996555123456')
         ->and($lead->company)->toBe('Acme');
 });
 
@@ -118,10 +119,10 @@ test('LeadBotFlow rejects invalid and foreign contact input without advancing', 
 
     sendLeadBotUpdate(22, 303, 'Азиз')->assertNoContent();
     sendLeadBotUpdate(23, 303, 'junk')->assertNoContent();
-    Telegraph::assertSent('Не удалось распознать номер. Введите номер Узбекистана или Кыргызстана.');
+    Telegraph::assertSent('Не удалось распознать номер. Введите номер Кыргызстана, например +996 555 123 456.');
 
     sendLeadBotUpdate(24, 303, contact: [
-        'phone_number' => '+998901234567',
+        'phone_number' => '+996555123456',
         'first_name' => 'Other',
         'user_id' => 999,
     ])->assertNoContent();
@@ -134,7 +135,7 @@ test('LeadBotFlow cancel resets the dialog', function () {
     sendLeadBotUpdate(30, 404, '/start')->assertNoContent();
     sendLeadBotUpdate(31, 404, 'Дана')->assertNoContent();
     sendLeadBotUpdate(32, 404, '/cancel')->assertNoContent();
-    sendLeadBotUpdate(33, 404, '+998901234567')->assertNoContent();
+    sendLeadBotUpdate(33, 404, '+996555123456')->assertNoContent();
 
     Telegraph::assertSent('Отправьте /start, чтобы оставить заявку.');
     expect(Lead::query()->count())->toBe(0);
@@ -145,7 +146,7 @@ test('LeadBotFlow deduplicates repeated submissions by Telegram user id', functi
         $messageId = 40 + ($iteration * 4);
         sendLeadBotUpdate($messageId, 505, '/start')->assertNoContent();
         sendLeadBotUpdate($messageId + 1, 505, $name)->assertNoContent();
-        sendLeadBotUpdate($messageId + 2, 505, '+998901234567')->assertNoContent();
+        sendLeadBotUpdate($messageId + 2, 505, '+996555123456')->assertNoContent();
         sendLeadBotUpdate($messageId + 3, 505, $company)->assertNoContent();
     }
 

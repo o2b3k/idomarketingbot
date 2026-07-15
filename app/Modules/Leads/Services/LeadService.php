@@ -10,7 +10,7 @@ use Throwable;
 final class LeadService
 {
     /**
-     * Normalize Uzbek and Kyrgyz phone numbers to E.164.
+     * Normalize Kyrgyz phone numbers to E.164.
      */
     public function normalizePhone(string $phone): ?string
     {
@@ -20,16 +20,13 @@ final class LeadService
             return null;
         }
 
-        foreach (['UZ', 'KG'] as $country) {
-            try {
-                $number = phone($phone, $country);
+        try {
+            $number = phone($phone, 'KG');
 
-                if ($number->isOfCountry($country)) {
-                    return $number->formatE164();
-                }
-            } catch (Throwable) {
-                // Try the next supported country.
+            if ($number->isOfCountry('KG')) {
+                return $number->formatE164();
             }
+        } catch (Throwable) {
         }
 
         Log::debug('Lead phone normalization failed', [

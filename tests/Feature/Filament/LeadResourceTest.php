@@ -53,7 +53,7 @@ test('manager can update lead status and contact details', function () {
     Livewire::test(EditLead::class, ['record' => $lead->getRouteKey()])
         ->fillForm([
             'name' => 'Обновлённое имя',
-            'phone' => '+998901112233',
+            'phone' => '+996555112233',
             'company' => 'Updated Company',
             'status' => LeadStatus::Contacted->value,
         ])
@@ -61,7 +61,7 @@ test('manager can update lead status and contact details', function () {
         ->assertHasNoFormErrors();
 
     expect($lead->refresh()->name)->toBe('Обновлённое имя')
-        ->and($lead->phone)->toBe('+998901112233')
+        ->and($lead->phone)->toBe('+996555112233')
         ->and($lead->company)->toBe('Updated Company')
         ->and($lead->status)->toBe(LeadStatus::Contacted);
 });

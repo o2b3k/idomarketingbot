@@ -118,7 +118,7 @@ final class LeadBotHandler extends WebhookHandler
         $phoneRaw = $contact?->phoneNumber() ?? trim($text);
 
         if ($this->leadService->normalizePhone($phoneRaw) === null) {
-            $this->reply('Не удалось распознать номер. Введите номер Узбекистана или Кыргызстана.');
+            $this->reply('Не удалось распознать номер. Введите номер Кыргызстана, например +996 555 123 456.');
 
             return;
         }
