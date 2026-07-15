@@ -80,7 +80,7 @@ test('LeadBotFlow normalizes only Kyrgyz phone numbers', function () {
 
 test('LeadBotFlow captures a full conversation with a manually entered phone', function () {
     sendLeadBotUpdate(1, 101, '/start')->assertNoContent();
-    Telegraph::assertSent('Здравствуйте! Как вас зовут?');
+    Telegraph::assertSent('Здравствуйте! Как к вам обращаться? Напишите имя');
 
     $startedLead = Lead::query()->sole();
     expect($startedLead->capture_step)->toBe(LeadCaptureStep::Started)
@@ -91,7 +91,7 @@ test('LeadBotFlow captures a full conversation with a manually entered phone', f
     sendLeadBotUpdate(2, 101, 'Алия')->assertNoContent();
     Telegraph::assertSentData('sendMessage', [
         'chat_id' => '101',
-        'text' => 'Отправьте номер телефона кнопкой ниже или введите его вручную.',
+        'text' => 'Приятно, Алия. Оставьте номер телефона — кнопкой ниже или введите вручную.',
         'reply_markup' => [
             'keyboard' => [[['text' => 'Поделиться номером', 'request_contact' => true]]],
             'resize_keyboard' => true,
@@ -104,11 +104,14 @@ test('LeadBotFlow captures a full conversation with a manually entered phone', f
         ->and($startedLead->phone)->toBeNull();
 
     sendLeadBotUpdate(3, 101, '0555 123 456')->assertNoContent();
+    Telegraph::assertSent('Спасибо. Как называется ваша компания?');
+
     expect($startedLead->refresh()->capture_step)->toBe(LeadCaptureStep::Phone)
         ->and($startedLead->phone)->toBe('+996555123456')
         ->and($startedLead->company)->toBeNull();
 
     sendLeadBotUpdate(4, 101, 'Acme')->assertNoContent();
+    Telegraph::assertSent('Готово! Мы записали заявку и скоро свяжемся. 🙌');
 
     $lead = Lead::query()->sole();
 
@@ -139,7 +142,7 @@ test('LeadBotFlow rejects invalid and foreign contact input without advancing', 
 
     sendLeadBotUpdate(22, 303, 'Азиз')->assertNoContent();
     sendLeadBotUpdate(23, 303, 'junk')->assertNoContent();
-    Telegraph::assertSent('Не удалось распознать номер. Введите номер Кыргызстана, например +996 555 123 456.');
+    Telegraph::assertSent('Не удалось распознать номер. Введите номер Кыргызстана, например +996 555 123 456 или 0555 123 456.');
 
     sendLeadBotUpdate(24, 303, contact: [
         'phone_number' => '+996555123456',

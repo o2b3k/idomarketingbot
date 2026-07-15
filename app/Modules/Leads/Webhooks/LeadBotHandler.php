@@ -28,7 +28,7 @@ final class LeadBotHandler extends WebhookHandler
         $this->leadService->startFromBot($this->telegramIdentity());
 
         Log::info('Telegram lead dialog started', ['tg_user_id' => $this->telegramUserId()]);
-        $this->reply('Здравствуйте! Как вас зовут?');
+        $this->reply('Здравствуйте! Как к вам обращаться? Напишите имя');
     }
 
     public function cancel(): void
@@ -101,7 +101,7 @@ final class LeadBotHandler extends WebhookHandler
             ->resize()
             ->oneTime();
 
-        $this->chat->message('Отправьте номер телефона кнопкой ниже или введите его вручную.')
+        $this->chat->message("Приятно, {$name}. Оставьте номер телефона — кнопкой ниже или введите вручную.")
             ->replyKeyboard($keyboard)
             ->send();
     }
@@ -121,7 +121,7 @@ final class LeadBotHandler extends WebhookHandler
         $phoneRaw = $contact?->phoneNumber() ?? trim($text);
 
         if ($this->leadService->normalizePhone($phoneRaw) === null) {
-            $this->reply('Не удалось распознать номер. Введите номер Кыргызстана, например +996 555 123 456.');
+            $this->reply('Не удалось распознать номер. Введите номер Кыргызстана, например +996 555 123 456 или 0555 123 456.');
 
             return;
         }
@@ -131,7 +131,7 @@ final class LeadBotHandler extends WebhookHandler
         $this->putState($state);
         $this->leadService->recordPhone($telegramUserId, $phoneRaw);
 
-        $this->chat->message('Как называется ваша компания?')
+        $this->chat->message('Спасибо. Как называется ваша компания?')
             ->removeReplyKeyboard()
             ->send();
     }
@@ -162,7 +162,7 @@ final class LeadBotHandler extends WebhookHandler
         $this->forgetState();
 
         Log::info('Telegram lead dialog completed', ['tg_user_id' => $this->telegramUserId()]);
-        $this->chat->message('Спасибо! Ваша заявка принята.')
+        $this->chat->message('Готово! Мы записали заявку и скоро свяжемся. 🙌')
             ->removeReplyKeyboard()
             ->send();
     }
