@@ -1,6 +1,7 @@
 <?php
 
-use DefStudio\Telegraph\Handlers\EmptyWebhookHandler;
+use App\Modules\Leads\Http\Middleware\VerifyTelegramWebhook;
+use App\Modules\Leads\Webhooks\LeadBotHandler;
 use DefStudio\Telegraph\Models\TelegraphBot;
 use DefStudio\Telegraph\Models\TelegraphChat;
 use DefStudio\Telegraph\Storage\CacheStorageDriver;
@@ -39,12 +40,12 @@ return [
          *
          * For reference, see https://docs.defstudio.it/telegraph/webhooks/overview
          */
-        'handler' => EmptyWebhookHandler::class,
+        'handler' => LeadBotHandler::class,
 
         /*
          * Middleware to be applied to the webhook route
          */
-        'middleware' => [],
+        'middleware' => [VerifyTelegramWebhook::class],
 
         /*
          * Sets a custom domain when registering a webhook. This will allow a local telegram bot api server
@@ -64,7 +65,12 @@ return [
          * secret token to be sent in a X-Telegram-Bot-Api-Secret-Token header
          * to verify the authenticity of the webhook
          */
-        'secret' => env('TELEGRAPH_WEBHOOK_SECRET'),
+        'secret_token' => env('TELEGRAPH_WEBHOOK_SECRET'),
+
+        'throttle' => [
+            'max_attempts' => env('TELEGRAPH_WEBHOOK_MAX_ATTEMPTS', 30),
+            'decay_seconds' => env('TELEGRAPH_WEBHOOK_DECAY_SECONDS', 60),
+        ],
 
         /**
          * maximum allowed simultaneous connections to the webhook (defaults to 40)
@@ -113,12 +119,12 @@ return [
         /*
          * if enabled, allows messages and commands from unregistered chats
          */
-        'allow_messages_from_unknown_chats' => false,
+        'allow_messages_from_unknown_chats' => true,
 
         /*
          * if enabled, store unknown chats as new TelegraphChat models
          */
-        'store_unknown_chats_in_db' => false,
+        'store_unknown_chats_in_db' => true,
     ],
 
     /*
@@ -137,7 +143,7 @@ return [
         /**
          * Default storage driver to be used for Telegraph data
          */
-        'default' => 'file',
+        'default' => 'cache',
 
         'stores' => [
             'file' => [
@@ -169,7 +175,7 @@ return [
                  * Laravel Cache store to use. See /config/cache/stores for available stores
                  * If 'null', Laravel default store will be used,
                  */
-                'store' => null,
+                'store' => env('TELEGRAPH_CACHE_STORE', 'redis'),
 
                 /*
                  * Prefix to be prepended to cache keys

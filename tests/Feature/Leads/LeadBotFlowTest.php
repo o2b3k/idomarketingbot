@@ -1,0 +1,169 @@
+<?php
+
+use App\Modules\Leads\Models\Lead;
+use App\Modules\Leads\Services\LeadService;
+use DefStudio\Telegraph\Facades\Telegraph;
+use DefStudio\Telegraph\Models\TelegraphBot;
+use Illuminate\Testing\TestResponse;
+
+beforeEach(function () {
+    config()->set('telegraph.storage.stores.cache.store', 'array');
+    config()->set('telegraph.webhook.secret_token', 'test-webhook-secret');
+    config()->set('telegraph.webhook.throttle.max_attempts', 30);
+    config()->set('telegraph.webhook.throttle.decay_seconds', 60);
+
+    Telegraph::fake();
+
+    TelegraphBot::query()->create([
+        'token' => 'test-bot-token',
+        'name' => 'Lead test bot',
+    ]);
+});
+
+function sendLeadBotUpdate(
+    int $updateId,
+    int $telegramUserId,
+    ?string $text = null,
+    ?array $contact = null,
+    bool $withSecret = true,
+): TestResponse {
+    $message = [
+        'message_id' => $updateId,
+        'date' => now()->timestamp,
+        'from' => [
+            'id' => $telegramUserId,
+            'is_bot' => false,
+            'first_name' => 'Test',
+            'username' => 'lead_user',
+            'language_code' => 'ru',
+        ],
+        'chat' => [
+            'id' => $telegramUserId,
+            'type' => 'private',
+            'first_name' => 'Test',
+        ],
+    ];
+
+    if ($text !== null) {
+        $message['text'] = $text;
+    }
+
+    if ($contact !== null) {
+        $message['contact'] = $contact;
+    }
+
+    $headers = $withSecret
+        ? ['X-Telegram-Bot-Api-Secret-Token' => 'test-webhook-secret']
+        : [];
+
+    return test()->postJson('/telegraph/test-bot-token/webhook', [
+        'update_id' => $updateId,
+        'message' => $message,
+    ], $headers);
+}
+
+test('LeadBotFlow normalizes Uzbek and Kyrgyz phone numbers', function () {
+    $service = app(LeadService::class);
+    $factoryLead = Lead::factory()->create();
+
+    expect($service->normalizePhone('90 123 45 67'))->toBe('+998901234567')
+        ->and($service->normalizePhone('+996 555 123 456'))->toBe('+996555123456')
+        ->and($service->normalizePhone('not-a-phone'))->toBeNull()
+        ->and($factoryLead->exists)->toBeTrue();
+});
+
+test('LeadBotFlow captures a full conversation with a manually entered phone', function () {
+    sendLeadBotUpdate(1, 101, '/start')->assertNoContent();
+    Telegraph::assertSent('Здравствуйте! Как вас зовут?');
+
+    sendLeadBotUpdate(2, 101, 'Алия')->assertNoContent();
+    Telegraph::assertSentData('sendMessage', [
+        'chat_id' => '101',
+        'text' => 'Отправьте номер телефона кнопкой ниже или введите его вручную.',
+        'reply_markup' => [
+            'keyboard' => [[['text' => 'Поделиться номером', 'request_contact' => true]]],
+            'resize_keyboard' => true,
+            'one_time_keyboard' => true,
+        ],
+    ]);
+
+    sendLeadBotUpdate(3, 101, '90 123 45 67')->assertNoContent();
+    sendLeadBotUpdate(4, 101, 'Acme')->assertNoContent();
+
+    $lead = Lead::query()->sole();
+
+    expect($lead->tg_user_id)->toBe(101)
+        ->and($lead->name)->toBe('Алия')
+        ->and($lead->phone)->toBe('+998901234567')
+        ->and($lead->company)->toBe('Acme');
+});
+
+test('LeadBotFlow accepts a shared contact belonging to the sender', function () {
+    sendLeadBotUpdate(10, 202, '/start')->assertNoContent();
+    sendLeadBotUpdate(11, 202, 'Бек')->assertNoContent();
+    sendLeadBotUpdate(12, 202, contact: [
+        'phone_number' => '+996555123456',
+        'first_name' => 'Бек',
+        'user_id' => 202,
+    ])->assertNoContent();
+    sendLeadBotUpdate(13, 202, 'Nomad')->assertNoContent();
+
+    expect(Lead::query()->sole()->phone)->toBe('+996555123456');
+});
+
+test('LeadBotFlow rejects invalid and foreign contact input without advancing', function () {
+    sendLeadBotUpdate(20, 303, '/start')->assertNoContent();
+    sendLeadBotUpdate(21, 303, 'A')->assertNoContent();
+    Telegraph::assertSent('Введите имя длиной от 2 до 100 символов.');
+
+    sendLeadBotUpdate(22, 303, 'Азиз')->assertNoContent();
+    sendLeadBotUpdate(23, 303, 'junk')->assertNoContent();
+    Telegraph::assertSent('Не удалось распознать номер. Введите номер Узбекистана или Кыргызстана.');
+
+    sendLeadBotUpdate(24, 303, contact: [
+        'phone_number' => '+998901234567',
+        'first_name' => 'Other',
+        'user_id' => 999,
+    ])->assertNoContent();
+    Telegraph::assertSent('Пожалуйста, отправьте именно свой контакт.');
+
+    expect(Lead::query()->count())->toBe(0);
+});
+
+test('LeadBotFlow cancel resets the dialog', function () {
+    sendLeadBotUpdate(30, 404, '/start')->assertNoContent();
+    sendLeadBotUpdate(31, 404, 'Дана')->assertNoContent();
+    sendLeadBotUpdate(32, 404, '/cancel')->assertNoContent();
+    sendLeadBotUpdate(33, 404, '+998901234567')->assertNoContent();
+
+    Telegraph::assertSent('Отправьте /start, чтобы оставить заявку.');
+    expect(Lead::query()->count())->toBe(0);
+});
+
+test('LeadBotFlow deduplicates repeated submissions by Telegram user id', function () {
+    foreach ([['First', 'Alpha'], ['Second', 'Beta']] as $iteration => [$name, $company]) {
+        $messageId = 40 + ($iteration * 4);
+        sendLeadBotUpdate($messageId, 505, '/start')->assertNoContent();
+        sendLeadBotUpdate($messageId + 1, 505, $name)->assertNoContent();
+        sendLeadBotUpdate($messageId + 2, 505, '+998901234567')->assertNoContent();
+        sendLeadBotUpdate($messageId + 3, 505, $company)->assertNoContent();
+    }
+
+    expect(Lead::query()->count())->toBe(1)
+        ->and(Lead::query()->sole()->name)->toBe('Second')
+        ->and(Lead::query()->sole()->company)->toBe('Beta');
+});
+
+test('LeadBotFlow rejects a webhook without its secret token', function () {
+    sendLeadBotUpdate(60, 606, '/start', withSecret: false)->assertForbidden();
+
+    expect(Lead::query()->count())->toBe(0);
+    Telegraph::assertNothingSent();
+});
+
+test('LeadBotFlow throttles excessive updates per Telegram user', function () {
+    config()->set('telegraph.webhook.throttle.max_attempts', 1);
+
+    sendLeadBotUpdate(70, 707, '/start')->assertNoContent();
+    sendLeadBotUpdate(71, 707, 'Name')->assertTooManyRequests();
+});
